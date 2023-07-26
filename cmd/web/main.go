@@ -4,29 +4,44 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 )
 
+type application struct {
+	errorLog *log.Logger
+	infoLog  *log.Logger
+}
+
 func main() {
-	// Define a new command-line flag with the name 'addr', a default value of ":4000"
-	// and some short help text explaining what the flag controls. The value of the
-	// flag will be stored in the addr variable at runtime.
+
 	addr := flag.String("addr", ":4000", "HTTP network address")
-	// addr declaration doesn't actually parse the command line, so we need to call flag.Parse(), to assign the command line flag to addr, otherwise the value will be :4000
 	flag.Parse()
 
-	mux := http.NewServeMux()
+	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+	errorLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
+	var app *application = &application{
+		infoLog:  infoLog,
+		errorLog: errorLog,
+	}
+
+	mux := http.NewServeMux()
 	fileServer := http.FileServer(http.Dir("./ui/static"))
 
 	mux.Handle("/static/", http.StripPrefix("/static", fileServer))
-	mux.HandleFunc("/", home)
-	mux.HandleFunc("/snippet/view", snippetView)
-	mux.HandleFunc("/snippet/create", snippetCreate)
+	mux.HandleFunc("/", app.home)
+	mux.HandleFunc("/snippet/view", app.snippetView)
+	mux.HandleFunc("/snippet/create", app.snippetCreate)
 
-	log.Printf("Starting server on %s", *addr)
+	infoLog.Printf("Starting server on %s", *addr)
 
-	err := http.ListenAndServe(*addr, mux)
+	srv := &http.Server{
+		Addr:     *addr,
+		Handler:  mux,
+		ErrorLog: errorLog,
+	}
 
-	log.Fatal(err)
+	err := srv.ListenAndServe()
+	errorLog.Fatal(err)
 
 }
